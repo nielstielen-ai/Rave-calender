@@ -18,6 +18,8 @@
   h1{font-size:12px;font-weight:600;letter-spacing:.35em;text-transform:uppercase;margin:0;color:var(--hi)}
   h1 span{color:var(--accent)}
   h2{font-size:11px;font-weight:400;letter-spacing:.25em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+  .quote{color:var(--dim);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+  .bar select{padding:6px 8px;font-size:11px;max-width:48vw}
   input,select,button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:0;padding:10px 12px;outline:none}
   input:focus,select:focus,button:focus-visible{border-color:var(--accent)}
   input{width:100%}
@@ -66,7 +68,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>RA<span>/</span>GIGS</h1>
+  <div class="bar"><h1>RA<span>/</span>GIGS</h1><span class="quote">Raven is leven</span></div>
 
   <section>
     <h2>Find artist</h2>
@@ -86,7 +88,6 @@
   <section>
     <div class="bar" style="margin-bottom:12px">
       <div class="row">
-        <button id="sort">Date ↑</button>
         <select id="country"><option value="">All countries</option></select>
         <select id="artistFilter"><option value="">All artists</option></select>
       </div>
@@ -106,7 +107,7 @@ const $ = (id) => document.getElementById(id);
 const LS = 'ra-gigs-v1';
 const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', country: '', artist: '', view: 'list', month: null, day: null, variant: 0, collapsed: false },
   (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } })());
-state.month = null; state.day = null;
+state.month = null; state.day = null; state.sort = 'asc';
 const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, country: state.country, artist: state.artist, view: state.view, variant: state.variant, collapsed: state.collapsed })); } catch {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -222,20 +223,24 @@ function renderChips() {
 
 /* ---------- gigs ---------- */
 const FIELDS = `id title date startTime contentUrl venue{name area{name country{name urlCode}}}`;
-const TYPES = ['FROMDATE', 'LATEST', null];
-const evQuery = (type) => `query A($id:ID!){artist(id:$id){events(limit:50${type ? ',type:' + type : ''}){${FIELDS}}}}`;
+const TYPES = ['FROMDATE', 'LATEST'];
+const evQuery = (type) => `query A($id:ID!){artist(id:$id){events(limit:50,type:${type}){${FIELDS}}}}`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function gqlRetry(q, vars) {
+  try { return await gql(q, vars); } catch (e) { await sleep(800); return gql(q, vars); }
+}
 async function fetchArtistEvents(a) {
-  let lastErr, ok = false;
+  let firstErr, ok = false;
   const seen = new Map();
-  for (let v = 0; v < TYPES.length; v++) {
+  for (const type of TYPES) {
     try {
-      const d = await gql(evQuery(TYPES[v]), { id: a.id });
+      const d = await gqlRetry(evQuery(type), { id: a.id });
       if (!d.artist) throw new Error('artist ' + a.id + ' not found');
       ok = true;
       for (const e of d.artist.events || []) if (!seen.has(e.id)) seen.set(e.id, e);
-    } catch (e) { lastErr = e; }
+    } catch (e) { firstErr = firstErr || e; }
   }
-  if (!ok) throw lastErr;
+  if (!ok) throw firstErr;
   return [...seen.values()];
 }
 const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -243,7 +248,8 @@ const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + St
 async function loadGigs(artists) {
   const errs = [], info = [];
   $('status').textContent = 'Loading gigs…';
-  await Promise.all(artists.map(async (a) => {
+  const queue = artists.slice();
+  const worker = async () => { while (queue.length) { const a = queue.shift();
     try {
       const evs = await fetchArtistEvents(a);
       state.gigs[a.id] = evs.map((e) => ({
@@ -255,7 +261,8 @@ async function loadGigs(artists) {
       const up = state.gigs[a.id].filter((g) => g.date >= todayStr()).length;
       info.push(a.name + ': ' + up + ' upcoming (' + state.gigs[a.id].length + ' returned)');
     } catch (e) { errs.push(a.name + ': ' + e.message); }
-  }));
+  } };
+  await Promise.all([worker(), worker(), worker()]);
   save();
   $('status').innerHTML = errs.length ? '<span class="err">' + esc(errs.join(' | ')) + '</span>' : '';
   render();
@@ -312,7 +319,6 @@ function render() {
   if (state.country && !countries.includes(state.country)) state.country = '';
   $('country').innerHTML = '<option value="">All countries</option>' + countries.map((c) => { const cc = (all.find((g) => g.country === c) || {}).cc; return `<option value="${esc(c)}">${flag(cc)} ${esc(c)}</option>`; }).join('');
   $('country').value = state.country;
-  $('sort').textContent = 'Date ' + (state.sort === 'asc' ? '↑' : '↓');
   $('vlist').classList.toggle('on', state.view === 'list');
   $('vcal').classList.toggle('on', state.view === 'cal');
   const g = filtered();
@@ -343,7 +349,6 @@ function renderCal(g) {
 
 /* ---------- wiring ---------- */
 $('tracktoggle').onclick = () => { state.collapsed = !state.collapsed; save(); renderChips(); };
-$('sort').onclick =() => { state.sort = state.sort === 'asc' ? 'desc' : 'asc'; save(); render(); };
 $('country').onchange = (e) => { state.country = e.target.value; state.day = null; save(); render(); };
 $('artistFilter').onchange = (e) => { state.artist = e.target.value; state.day = null; save(); render(); };
 $('vlist').onclick = () => { state.view = 'list'; save(); render(); };
