@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RA Gigs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#08090a; --panel:#0e1012; --line:#1e2226; --dim:#6b737b; --fg:#d7dbde; --hi:#ffffff; --accent:#ff3b2f;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px;line-height:1.5}
+  body{padding:24px max(16px,env(safe-area-inset-left,0px)) 80px}
+  .wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+  h1{font-size:12px;font-weight:600;letter-spacing:.35em;text-transform:uppercase;margin:0;color:var(--hi)}
+  h1 span{color:var(--accent)}
+  h2{font-size:11px;font-weight:400;letter-spacing:.25em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+  input,select,button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:0;padding:10px 12px;outline:none}
+  input:focus,select:focus,button:focus-visible{border-color:var(--accent)}
+  input{width:100%}
+  button{cursor:pointer;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+  button:hover{border-color:var(--dim);color:var(--hi)}
+  button.on{background:var(--hi);color:var(--bg);border-color:var(--hi)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .results{border:1px solid var(--line);border-top:0}
+  .res{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;background:var(--panel)}
+  .res:last-child{border-bottom:0}
+  .res:hover{background:#14171a}
+  .res img,.ph{width:44px;height:44px;object-fit:cover;background:#15181b;filter:grayscale(1)}
+  .res .n{color:var(--hi)} .res .s{color:var(--dim);font-size:11px}
+  .res .add{color:var(--accent);font-size:11px;letter-spacing:.1em}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{display:flex;align-items:center;gap:8px;border:1px solid var(--line);padding:6px 6px 6px 10px;background:var(--panel)}
+  .chip button{border:0;background:none;padding:2px 6px;color:var(--dim);font-size:14px;line-height:1}
+  .chip button:hover{color:var(--accent)}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+  .muted{color:var(--dim)}
+  .month{display:flex;align-items:center;gap:12px;margin-top:26px;padding-bottom:8px;border-bottom:1px solid var(--line);color:var(--accent);font-size:22px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .month:first-child{margin-top:0}
+  .month svg{flex:none;width:20px;height:28px}
+  .gig{display:grid;grid-template-columns:96px 1fr auto;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);align-items:baseline}
+  .gig .d{color:var(--hi);font-variant-numeric:tabular-nums}
+  .gig .a{color:var(--hi)} .gig .v{color:var(--dim)}
+  .gig .f{font-size:18px}
+  .gig a{color:inherit;text-decoration:none} .gig a:hover .a{color:var(--accent)}
+  .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+  .dow{background:var(--bg);padding:6px;color:var(--dim);font-size:10px;letter-spacing:.15em;text-align:center}
+  .cell{background:var(--panel);min-height:78px;padding:4px;overflow:hidden;cursor:pointer}
+  .cell.out{background:var(--bg);opacity:.45}
+  .cell.today{outline:1px solid var(--accent);outline-offset:-1px}
+  .cell.sel{background:#171a1d}
+  .cell .n{font-size:10px;color:var(--dim)}
+  .ev{font-size:10px;color:var(--hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:2px solid var(--accent);padding-left:4px;margin-top:2px}
+  .detail{margin-top:12px}
+  .err{color:var(--accent)}
+  @media(max-width:560px){
+    .gig{grid-template-columns:72px 1fr auto;gap:10px}
+    .cell{min-height:56px}.ev{font-size:0;border-left-width:6px;height:6px;margin-top:3px;padding:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>RA<span>/</span>GIGS</h1>
+
+  <section>
+    <h2>Find artist</h2>
+    <input id="q" type="search" placeholder="Search Resident Advisor…" autocomplete="off" spellcheck="false">
+    <div id="results" class="results" hidden></div>
+    <div id="searchmsg" class="muted" style="margin-top:8px"></div>
+  </section>
+
+  <section>
+    <h2>Tracking</h2>
+    <div id="chips" class="chips"></div>
+  </section>
+
+  <section>
+    <div class="bar" style="margin-bottom:12px">
+      <div class="row">
+        <button id="sort">Date ↑</button>
+        <select id="country"><option value="">All countries</option></select>
+        <select id="artistFilter"><option value="">All artists</option></select>
+      </div>
+      <div class="row">
+        <button id="vlist" class="on">List</button>
+        <button id="vcal">Calendar</button>
+        <button id="refresh">Refresh</button>
+      </div>
+    </div>
+    <div id="status" class="muted" style="margin-bottom:8px"></div>
+    <div id="view"></div>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const LS = 'ra-gigs-v1';
+const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', country: '', artist: '', view: 'list', month: null, day: null, variant: 0 },
+  (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } })());
+state.month = null; state.day = null;
+const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, country: state.country, artist: state.artist, view: state.view, variant: state.variant })); } catch {} };
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const flag = (code) => {
+  if (!code) return '';
+  let c = code.toUpperCase(); if (c === 'UK') c = 'GB';
+  if (!/^[A-Z]{2}$/.test(c)) return '';
+  return String.fromCodePoint(...[...c].map((x) => 127397 + x.charCodeAt(0)));
+};
+
+async function gql(query, variables) {
+  const r = await fetch('/gql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables }) });
+  const raw = await r.text();
+  let j = {};
+  try { j = JSON.parse(raw); } catch {}
+  if (!r.ok || j.errors) throw new Error((j.errors && j.errors[0] && j.errors[0].message) || 'HTTP ' + r.status + ': ' + raw.replace(/\s+/g, ' ').slice(0, 200));
+  return j.data;
+}
+
+/* ---------- shared artist list (stored on the server) ---------- */
+async function pushArtists() {
+  try { await fetch('/api/artists', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state.artists) }); } catch {}
+}
+async function pullArtists() {
+  try {
+    const r = await fetch('/api/artists');
+    if (!r.ok) return;
+    const list = await r.json();
+    if (!Array.isArray(list)) return;
+    if (!list.length && state.artists.length) await pushArtists();
+    else { state.artists = list; save(); }
+  } catch {}
+}
+
+/* ---------- search ---------- */
+const named = (t) => { while (t && t.ofType) t = t.ofType; return t; };
+const hasList = (t) => { while (t) { if (t.kind === 'LIST') return true; t = t.ofType; } return false; };
+const TYPEQ = (n) => `query{__type(name:"${n}"){fields{name type{kind name ofType{kind name ofType{kind name ofType{kind name}}}}}}}`;
+let searchPlan = null;
+async function planSearch() {
+  if (searchPlan) return searchPlan;
+  const s = (await gql(TYPEQ('Search'))).__type;
+  if (!s || !s.fields) throw new Error('RA schema: type "Search" not found');
+  const lf = s.fields.find((f) => hasList(f.type));
+  if (!lf) throw new Error('RA schema: Search has no list field (fields: ' + s.fields.map((f) => f.name).join(', ') + ')');
+  const el = named(lf.type).name;
+  const e = (await gql(TYPEQ(el))).__type;
+  if (!e || !e.fields) throw new Error('RA schema: result type ' + el + ' has no plain fields');
+  const want = ['id', 'value', 'name', 'contentUrl', 'areaName', 'countryName', 'imageUrl', 'url'];
+  const fields = e.fields.filter((f) => want.includes(f.name) && !hasList(f.type) && ['SCALAR', 'ENUM'].includes(named(f.type).kind)).map((f) => f.name);
+  searchPlan = { list: lf.name, fields };
+  return searchPlan;
+}
+async function searchArtists(t) {
+  const d = await gql(`query S($t:String!){search(searchTerm:$t,limit:20,indices:[ARTIST],includeNonLive:true){id value areaName countryName contentUrl imageUrl searchType}}`, { t });
+  const rows = Array.isArray(d.search) ? d.search : [];
+  return rows.filter((r) => !r.searchType || String(r.searchType).toUpperCase() === 'ARTIST').map((r) => ({ id: r.id, value: r.value, contentUrl: r.contentUrl || '', areaName: r.areaName, countryName: r.countryName, imageUrl: r.imageUrl }));
+}
+let timer, seq = 0;
+$('q').addEventListener('input', () => {
+  clearTimeout(timer);
+  const t = $('q').value.trim();
+  if (t.length < 2) { $('results').hidden = true; $('searchmsg').textContent = ''; return; }
+  timer = setTimeout(() => doSearch(t), 300);
+});
+async function doSearch(t) {
+  const my = ++seq; $('searchmsg').textContent = 'Searching…';
+  try {
+    const list = await searchArtists(t);
+    if (my !== seq) return;
+    $('searchmsg').textContent = list.length ? list.length + ' artists on Resident Advisor' : 'No artists found';
+    $('results').hidden = !list.length;
+    $('results').innerHTML = list.map((a, i) => {
+      const slug = (a.contentUrl || '').split('/').filter(Boolean).pop();
+      const has = state.artists.some((x) => x.id === a.id);
+      const sub = [a.areaName, a.countryName].filter(Boolean).join(', ') || slug;
+      return `<div class="res" data-i="${i}">${a.imageUrl ? `<img src="${esc(a.imageUrl)}" alt="">` : '<div class="ph"></div>'}<div><div class="n">${esc(a.value)}</div><div class="s">${esc(sub)} · ra.co/dj/${esc(slug)}</div></div><div class="add">${has ? 'ADDED' : '+ ADD'}</div></div>`;
+    }).join('');
+    $('results').onclick = (e) => {
+      const el = e.target.closest('.res'); if (!el) return;
+      const a = list[+el.dataset.i];
+      const slug = (a.contentUrl || '').split('/').filter(Boolean).pop();
+      addArtist({ id: a.id, name: a.value, slug });
+      $('q').value = ''; $('results').hidden = true; $('searchmsg').textContent = '';
+    };
+  } catch (e) { if (my === seq) { $('searchmsg').innerHTML = '<span class="err">Search failed: ' + esc(e.message) + '</span>'; } }
+}
+
+/* ---------- artists ---------- */
+function addArtist(a) {
+  if (state.artists.some((x) => x.id === a.id)) return;
+  state.artists.push(a); save(); pushArtists(); renderChips(); loadGigs([a]);
+}
+function removeArtist(id) {
+  state.artists = state.artists.filter((a) => a.id !== id);
+  delete state.gigs[id];
+  if (state.artist === id) state.artist = '';
+  save(); pushArtists(); renderChips();
+  $('status').textContent = state.artists.map((x) => { const g = state.gigs[x.id] || []; return x.name + ': ' + g.filter((y) => y.date >= todayStr()).length + ' upcoming (' + g.length + ' returned)'; }).join(' · ');
+  render();
+}
+function renderChips() {
+  $('chips').innerHTML = state.artists.length
+    ? state.artists.map((a) => `<div class="chip"><span>${esc(a.name)}</span><button data-id="${esc(a.id)}" aria-label="Remove ${esc(a.name)}">×</button></div>`).join('')
+    : '<span class="muted">No artists yet. Search above and select one.</span>';
+  $('chips').onclick = (e) => { const b = e.target.closest('button'); if (b) removeArtist(b.dataset.id); };
+  $('artistFilter').innerHTML = '<option value="">All artists</option>' + state.artists.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  $('artistFilter').value = state.artist;
+}
+
+/* ---------- gigs ---------- */
+const FIELDS = `id title date startTime contentUrl venue{name area{name country{name urlCode}}}`;
+const TYPES = ['FROMDATE', 'LATEST', null];
+const evQuery = (type) => `query A($id:ID!){artist(id:$id){events(limit:50${type ? ',type:' + type : ''}){${FIELDS}}}}`;
+async function fetchArtistEvents(a) {
+  let lastErr, ok = false;
+  const seen = new Map();
+  for (let v = 0; v < TYPES.length; v++) {
+    try {
+      const d = await gql(evQuery(TYPES[v]), { id: a.id });
+      if (!d.artist) throw new Error('artist ' + a.id + ' not found');
+      ok = true;
+      for (const e of d.artist.events || []) if (!seen.has(e.id)) seen.set(e.id, e);
+    } catch (e) { lastErr = e; }
+  }
+  if (!ok) throw lastErr;
+  return [...seen.values()];
+}
+const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+async function loadGigs(artists) {
+  const errs = [], info = [];
+  $('status').textContent = 'Loading gigs…';
+  await Promise.all(artists.map(async (a) => {
+    try {
+      const evs = await fetchArtistEvents(a);
+      state.gigs[a.id] = evs.map((e) => ({
+        id: e.id, date: String(e.date || '').slice(0, 10), title: e.title, url: e.contentUrl ? 'https://ra.co' + e.contentUrl : '',
+        venue: e.venue ? e.venue.name : '', city: e.venue && e.venue.area ? e.venue.area.name : '',
+        country: e.venue && e.venue.area && e.venue.area.country ? e.venue.area.country.name : '',
+        cc: e.venue && e.venue.area && e.venue.area.country ? e.venue.area.country.urlCode : '',
+      }));
+      const up = state.gigs[a.id].filter((g) => g.date >= todayStr()).length;
+      info.push(a.name + ': ' + up + ' upcoming (' + state.gigs[a.id].length + ' returned)');
+    } catch (e) { errs.push(a.name + ': ' + e.message); }
+  }));
+  save();
+  $('status').innerHTML = (errs.length ? '<span class="err">' + esc(errs.join(' | ')) + '</span><br>' : '') + esc(info.join(' · '));
+  render();
+}
+
+function allGigs() {
+  const t = todayStr(), out = [];
+  for (const a of state.artists) for (const g of state.gigs[a.id] || []) if (g.date >= t) out.push(Object.assign({ artist: a.name, artistId: a.id }, g));
+  return out;
+}
+function filtered() {
+  let g = allGigs();
+  if (state.country) g = g.filter((x) => x.country === state.country);
+  if (state.artist) g = g.filter((x) => x.artistId === state.artist);
+  g.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) * (state.sort === 'asc' ? 1 : -1));
+  return g;
+}
+
+/* ---------- render ---------- */
+const fmt = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+function gigRow(g) {
+  const where = [g.venue, g.city].filter(Boolean).join(' · ');
+  return `<div class="gig"><div class="d">${fmt(g.date)}</div><a href="${esc(g.url)}" target="_blank" rel="noopener"><div class="a">${esc(g.artist)}</div><div class="v">${esc(where)}${g.title ? ' — ' + esc(g.title) : ''}</div></a><div class="f" title="${esc(g.country)}">${flag(g.cc) || '—'}</div></div>`;
+}
+const monthHead = (ym) => {
+  const [y, m] = ym.split('-').map(Number);
+  const label = new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  return `<div class="month"><svg viewBox="0 0 20 28" aria-hidden="true"><line x1="1" y1="27" x2="19" y2="1" stroke="currentColor" stroke-width="1.5"/></svg><span>${esc(label)}</span></div>`;
+};
+function listHtml(g) {
+  let out = '', cur = '';
+  for (const x of g) {
+    const ym = x.date.slice(0, 7);
+    if (ym !== cur) { cur = ym; out += monthHead(ym); }
+    out += gigRow(x);
+  }
+  return out;
+}
+function render() {
+  const all = allGigs();
+  const countries = [...new Set(all.map((g) => g.country).filter(Boolean))].sort();
+  if (state.country && !countries.includes(state.country)) state.country = '';
+  $('country').innerHTML = '<option value="">All countries</option>' + countries.map((c) => { const cc = (all.find((g) => g.country === c) || {}).cc; return `<option value="${esc(c)}">${flag(cc)} ${esc(c)}</option>`; }).join('');
+  $('country').value = state.country;
+  $('sort').textContent = 'Date ' + (state.sort === 'asc' ? '↑' : '↓');
+  $('vlist').classList.toggle('on', state.view === 'list');
+  $('vcal').classList.toggle('on', state.view === 'cal');
+  const g = filtered();
+  if (!state.artists.length) { $('view').innerHTML = ''; return; }
+  if (state.view === 'list') {
+    $('view').innerHTML = g.length ? listHtml(g) : '<div class="muted">No upcoming gigs found.</div>';
+  } else renderCal(g);
+}
+function renderCal(g) {
+  if (!state.month) { const f = g[0] ? g.slice().sort((a, b) => (a.date < b.date ? -1 : 1))[0].date : todayStr(); state.month = f.slice(0, 7); }
+  const [y, m] = state.month.split('-').map(Number);
+  const first = new Date(y, m - 1, 1), start = (first.getDay() + 6) % 7, days = new Date(y, m, 0).getDate();
+  const by = {}; g.forEach((x) => (by[x.date] = by[x.date] || []).push(x));
+  let cells = '';
+  ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].forEach((d) => (cells += `<div class="dow">${d}</div>`));
+  for (let i = 0; i < start; i++) cells += '<div class="cell out"></div>';
+  for (let d = 1; d <= days; d++) {
+    const ds = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const evs = by[ds] || [];
+    cells += `<div class="cell${ds === todayStr() ? ' today' : ''}${ds === state.day ? ' sel' : ''}" data-d="${ds}"><div class="n">${d}</div>${evs.slice(0, 3).map((e) => `<div class="ev">${flag(e.cc)} ${esc(e.artist)}</div>`).join('')}${evs.length > 3 ? `<div class="n">+${evs.length - 3}</div>` : ''}</div>`;
+  }
+  const title = first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase();
+  $('view').innerHTML = `<div class="cal-head"><button id="prev">←</button><span class="muted">${title}</span><button id="next">→</button></div><div class="grid">${cells}</div><div class="detail">${state.day && by[state.day] ? by[state.day].map(gigRow).join('') : '<span class="muted">Select a day.</span>'}</div>`;
+  const shift = (n) => { const d = new Date(y, m - 1 + n, 1); state.month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); state.day = null; render(); };
+  $('prev').onclick = () => shift(-1); $('next').onclick = () => shift(1);
+  $('view').querySelector('.grid').onclick = (e) => { const c = e.target.closest('.cell[data-d]'); if (c) { state.day = c.dataset.d; render(); } };
+}
+
+/* ---------- wiring ---------- */
+$('sort').onclick = () => { state.sort = state.sort === 'asc' ? 'desc' : 'asc'; save(); render(); };
+$('country').onchange = (e) => { state.country = e.target.value; state.day = null; save(); render(); };
+$('artistFilter').onchange = (e) => { state.artist = e.target.value; state.day = null; save(); render(); };
+$('vlist').onclick = () => { state.view = 'list'; save(); render(); };
+$('vcal').onclick = () => { state.view = 'cal'; save(); render(); };
+$('refresh').onclick = async () => { await pullArtists(); renderChips(); loadGigs(state.artists); };
+
+renderChips(); render();
+(async () => { await pullArtists(); renderChips(); render(); if (state.artists.length) loadGigs(state.artists); })();
+</script>
+</body>
+</html>
