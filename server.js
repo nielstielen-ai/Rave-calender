@@ -9,6 +9,27 @@ const RA_ENDPOINT = 'https://ra.co/graphql';
 // Shared artist list, stored in a file next to the server (override with DATA_FILE).
 const DATA = process.env.DATA_FILE || path.join(__dirname, 'artists.json');
 
+// Storage: Upstash Redis (free, survives restarts) when its two settings exist, otherwise a local file.
+const UP_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UP_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+async function loadList() {
+  if (UP_URL && UP_TOKEN) {
+    const r = await fetch(UP_URL + '/get/artists', { headers: { Authorization: 'Bearer ' + UP_TOKEN } });
+    if (!r.ok) throw new Error('Upstash ' + r.status);
+    const j = await r.json();
+    return j.result || '[]';
+  }
+  try { return fs.readFileSync(DATA, 'utf8'); } catch { return '[]'; }
+}
+async function saveList(json) {
+  if (UP_URL && UP_TOKEN) {
+    const r = await fetch(UP_URL + '/set/artists', { method: 'POST', headers: { Authorization: 'Bearer ' + UP_TOKEN }, body: json });
+    if (!r.ok) throw new Error('Upstash ' + r.status);
+    return;
+  }
+  fs.writeFileSync(DATA, json);
+}
+
 // Optional shared password (set PASSWORD in the host's environment settings). Any username works.
 const PASSWORD = process.env.PASSWORD;
 
@@ -22,20 +43,25 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (req.url === '/api/artists' && req.method === 'GET') {
-    let d = '[]';
-    try { d = fs.readFileSync(DATA, 'utf8'); } catch {}
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(d);
+    try {
+      const d = await loadList();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(d);
+    } catch (e) {
+      console.log('loadList failed:', e.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
     return;
   }
   if (req.url === '/api/artists' && req.method === 'PUT') {
     let b = '';
     req.on('data', (c) => (b += c));
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const list = JSON.parse(b);
         if (!Array.isArray(list)) throw new Error('not an array');
-        fs.writeFileSync(DATA, JSON.stringify(list));
+        await saveList(JSON.stringify(list));
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end('{"ok":true}');
       } catch (e) {
