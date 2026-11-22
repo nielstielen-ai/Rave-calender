@@ -32,8 +32,9 @@
   .res img,.ph{width:44px;height:44px;object-fit:cover;background:#15181b;filter:grayscale(1)}
   .res .n{color:var(--hi)} .res .s{color:var(--dim);font-size:11px}
   .res .add{color:var(--accent);font-size:11px;letter-spacing:.1em}
-  .chips{display:flex;gap:8px;flex-wrap:wrap}
-  .chip{display:flex;align-items:center;gap:8px;border:1px solid var(--line);padding:6px 6px 6px 10px;background:var(--panel)}
+  [hidden]{display:none!important}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{display:flex;align-items:center;gap:4px;border:1px solid var(--line);padding:2px 2px 2px 8px;background:var(--panel);font-size:12px}
   .chip button{border:0;background:none;padding:2px 6px;color:var(--dim);font-size:14px;line-height:1}
   .chip button:hover{color:var(--accent)}
   .bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center}
@@ -75,7 +76,10 @@
   </section>
 
   <section>
-    <h2>Tracking</h2>
+    <div class="bar" style="margin-bottom:10px">
+      <h2 id="trackh" style="margin:0">Tracking</h2>
+      <button id="tracktoggle">Hide</button>
+    </div>
     <div id="chips" class="chips"></div>
   </section>
 
@@ -100,10 +104,10 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const LS = 'ra-gigs-v1';
-const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', country: '', artist: '', view: 'list', month: null, day: null, variant: 0 },
+const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', country: '', artist: '', view: 'list', month: null, day: null, variant: 0, collapsed: false },
   (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } })());
 state.month = null; state.day = null;
-const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, country: state.country, artist: state.artist, view: state.view, variant: state.variant })); } catch {} };
+const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, country: state.country, artist: state.artist, view: state.view, variant: state.variant, collapsed: state.collapsed })); } catch {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const flag = (code) => {
@@ -201,10 +205,13 @@ function removeArtist(id) {
   delete state.gigs[id];
   if (state.artist === id) state.artist = '';
   save(); pushArtists(); renderChips();
-  $('status').textContent = state.artists.map((x) => { const g = state.gigs[x.id] || []; return x.name + ': ' + g.filter((y) => y.date >= todayStr()).length + ' upcoming (' + g.length + ' returned)'; }).join(' · ');
+  $('status').textContent = '';
   render();
 }
 function renderChips() {
+  $('trackh').textContent = 'Tracking · ' + state.artists.length;
+  $('tracktoggle').textContent = state.collapsed ? 'Show' : 'Hide';
+  $('chips').hidden = state.collapsed;
   $('chips').innerHTML = state.artists.length
     ? state.artists.map((a) => `<div class="chip"><span>${esc(a.name)}</span><button data-id="${esc(a.id)}" aria-label="Remove ${esc(a.name)}">×</button></div>`).join('')
     : '<span class="muted">No artists yet. Search above and select one.</span>';
@@ -250,7 +257,7 @@ async function loadGigs(artists) {
     } catch (e) { errs.push(a.name + ': ' + e.message); }
   }));
   save();
-  $('status').innerHTML = (errs.length ? '<span class="err">' + esc(errs.join(' | ')) + '</span><br>' : '') + esc(info.join(' · '));
+  $('status').innerHTML = errs.length ? '<span class="err">' + esc(errs.join(' | ')) + '</span>' : '';
   render();
 }
 
@@ -259,10 +266,22 @@ function allGigs() {
   for (const a of state.artists) for (const g of state.gigs[a.id] || []) if (g.date >= t) out.push(Object.assign({ artist: a.name, artistId: a.id }, g));
   return out;
 }
+// Same event for several tracked artists becomes one row with all their names.
+function groupGigs(list) {
+  const m = new Map();
+  for (const x of list) {
+    const k = x.id || x.date + '|' + x.venue;
+    const e = m.get(k);
+    if (e) { if (!e.names.includes(x.artist)) e.names.push(x.artist); }
+    else m.set(k, Object.assign({}, x, { names: [x.artist] }));
+  }
+  return [...m.values()].map((x) => Object.assign(x, { artist: x.names.join(', ') }));
+}
 function filtered() {
   let g = allGigs();
   if (state.country) g = g.filter((x) => x.country === state.country);
   if (state.artist) g = g.filter((x) => x.artistId === state.artist);
+  g = groupGigs(g);
   g.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) * (state.sort === 'asc' ? 1 : -1));
   return g;
 }
@@ -323,7 +342,8 @@ function renderCal(g) {
 }
 
 /* ---------- wiring ---------- */
-$('sort').onclick = () => { state.sort = state.sort === 'asc' ? 'desc' : 'asc'; save(); render(); };
+$('tracktoggle').onclick = () => { state.collapsed = !state.collapsed; save(); renderChips(); };
+$('sort').onclick =() => { state.sort = state.sort === 'asc' ? 'desc' : 'asc'; save(); render(); };
 $('country').onchange = (e) => { state.country = e.target.value; state.day = null; save(); render(); };
 $('artistFilter').onchange = (e) => { state.artist = e.target.value; state.day = null; save(); render(); };
 $('vlist').onclick = () => { state.view = 'list'; save(); render(); };
