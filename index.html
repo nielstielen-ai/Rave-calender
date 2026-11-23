@@ -94,7 +94,6 @@
       <div class="row">
         <button id="vlist" class="on">List</button>
         <button id="vcal">Calendar</button>
-        <button id="refresh">Refresh</button>
       </div>
     </div>
     <div id="status" class="muted" style="margin-bottom:8px"></div>
@@ -199,7 +198,7 @@ async function doSearch(t) {
 /* ---------- artists ---------- */
 function addArtist(a) {
   if (state.artists.some((x) => x.id === a.id)) return;
-  state.artists.push(a); save(); pushArtists(); renderChips(); loadGigs([a]);
+  state.artists.push(a); save(); renderChips(); pollCount = 0; pushArtists().then(() => loadGigs());
 }
 function removeArtist(id) {
   state.artists = state.artists.filter((a) => a.id !== id);
@@ -221,51 +220,24 @@ function renderChips() {
   $('artistFilter').value = state.artist;
 }
 
-/* ---------- gigs ---------- */
-const FIELDS = `id title date startTime contentUrl venue{name area{name country{name urlCode}}}`;
-const TYPES = ['FROMDATE', 'LATEST'];
-const evQuery = (type) => `query A($id:ID!){artist(id:$id){events(limit:50,type:${type}){${FIELDS}}}}`;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function gqlRetry(q, vars) {
-  try { return await gql(q, vars); } catch (e) { await sleep(800); return gql(q, vars); }
-}
-async function fetchArtistEvents(a) {
-  let firstErr, ok = false;
-  const seen = new Map();
-  for (const type of TYPES) {
-    try {
-      const d = await gqlRetry(evQuery(type), { id: a.id });
-      if (!d.artist) throw new Error('artist ' + a.id + ' not found');
-      ok = true;
-      for (const e of d.artist.events || []) if (!seen.has(e.id)) seen.set(e.id, e);
-    } catch (e) { firstErr = firstErr || e; }
-  }
-  if (!ok) throw firstErr;
-  return [...seen.values()];
-}
+/* ---------- gigs (collected and cached by the server) ---------- */
 const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-
-async function loadGigs(artists) {
-  const errs = [], info = [];
-  $('status').textContent = 'Loading gigs…';
-  const queue = artists.slice();
-  const worker = async () => { while (queue.length) { const a = queue.shift();
-    try {
-      const evs = await fetchArtistEvents(a);
-      state.gigs[a.id] = evs.map((e) => ({
-        id: e.id, date: String(e.date || '').slice(0, 10), title: e.title, url: e.contentUrl ? 'https://ra.co' + e.contentUrl : '',
-        venue: e.venue ? e.venue.name : '', city: e.venue && e.venue.area ? e.venue.area.name : '',
-        country: e.venue && e.venue.area && e.venue.area.country ? e.venue.area.country.name : '',
-        cc: e.venue && e.venue.area && e.venue.area.country ? e.venue.area.country.urlCode : '',
-      }));
-      const up = state.gigs[a.id].filter((g) => g.date >= todayStr()).length;
-      info.push(a.name + ': ' + up + ' upcoming (' + state.gigs[a.id].length + ' returned)');
-    } catch (e) { errs.push(a.name + ': ' + e.message); }
-  } };
-  await Promise.all([worker(), worker(), worker()]);
+let pollTimer = null, pollCount = 0;
+async function loadGigs() {
+  clearTimeout(pollTimer);
+  let d;
+  try {
+    const r = await fetch('/api/gigs');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) { $('status').innerHTML = '<span class="err">Could not load gigs: ' + esc(e.message) + '</span>'; return; }
+  state.gigs = d.gigs || {};
   save();
-  $('status').innerHTML = errs.length ? '<span class="err">' + esc(errs.join(' | ')) + '</span>' : '';
   render();
+  const when = d.updatedAt ? new Date(d.updatedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  $('status').innerHTML = esc(d.refreshing ? 'Updating from RA…' : when ? 'Updated ' + when : '') +
+    (d.errors && d.errors.length ? '<br><span class="err">' + esc(d.errors.join(' | ')) + '</span>' : '');
+  if (d.refreshing && pollCount++ < 60) pollTimer = setTimeout(loadGigs, 3000);
 }
 
 function allGigs() {
@@ -353,10 +325,9 @@ $('country').onchange = (e) => { state.country = e.target.value; state.day = nul
 $('artistFilter').onchange = (e) => { state.artist = e.target.value; state.day = null; save(); render(); };
 $('vlist').onclick = () => { state.view = 'list'; save(); render(); };
 $('vcal').onclick = () => { state.view = 'cal'; save(); render(); };
-$('refresh').onclick = async () => { await pullArtists(); renderChips(); loadGigs(state.artists); };
 
 renderChips(); render();
-(async () => { await pullArtists(); renderChips(); render(); if (state.artists.length) loadGigs(state.artists); })();
+(async () => { await pullArtists(); renderChips(); render(); loadGigs(); })();
 </script>
 </body>
 </html>
