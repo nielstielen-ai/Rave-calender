@@ -20,6 +20,13 @@
   h2{font-size:11px;font-weight:400;letter-spacing:.25em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
   .quote{color:var(--dim);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
   .bar select{padding:6px 8px;font-size:11px;max-width:48vw}
+  .ms{position:relative}
+  .ms > button{padding:6px 8px;font-size:11px;text-transform:none;letter-spacing:0;max-width:48vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .panel{position:absolute;z-index:5;top:100%;left:0;margin-top:4px;min-width:230px;max-height:55vh;overflow:auto;background:var(--panel);border:1px solid var(--line);padding:4px}
+  .opt{display:flex;align-items:center;gap:10px;padding:7px 8px;font-size:12px;cursor:pointer}
+  .opt:hover{background:#14171a}
+  .opt input{width:auto;padding:0;accent-color:var(--accent)}
+  .panel .clear{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);color:var(--accent);padding:8px;margin-bottom:4px}
   input,select,button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:0;padding:10px 12px;outline:none}
   input:focus,select:focus,button:focus-visible{border-color:var(--accent)}
   input{width:100%}
@@ -88,7 +95,10 @@
   <section>
     <div class="bar" style="margin-bottom:12px">
       <div class="row">
-        <select id="country"><option value="">All countries</option></select>
+        <div class="ms">
+          <button id="countryBtn" type="button" aria-haspopup="true" aria-expanded="false">All countries ▾</button>
+          <div id="countryPanel" class="panel" hidden></div>
+        </div>
         <select id="artistFilter"><option value="">All artists</option></select>
       </div>
       <div class="row">
@@ -104,10 +114,12 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const LS = 'ra-gigs-v1';
-const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', country: '', artist: '', view: 'list', month: null, day: null, variant: 0, collapsed: false },
+const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', countries: [], artist: '', view: 'list', month: null, day: null, variant: 0, collapsed: false },
   (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } })());
 state.month = null; state.day = null; state.sort = 'asc';
-const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, country: state.country, artist: state.artist, view: state.view, variant: state.variant, collapsed: state.collapsed })); } catch {} };
+if (!Array.isArray(state.countries)) state.countries = [];
+if (state.country) { if (!state.countries.length) state.countries = [state.country]; delete state.country; } // older saved single filter
+const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, countries: state.countries, artist: state.artist, view: state.view, variant: state.variant, collapsed: state.collapsed })); } catch {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const flag = (code) => {
@@ -258,7 +270,7 @@ function groupGigs(list) {
 }
 function filtered() {
   let g = allGigs();
-  if (state.country) g = g.filter((x) => x.country === state.country);
+  if (state.countries.length) g = g.filter((x) => state.countries.includes(x.country));
   if (state.artist) g = g.filter((x) => x.artistId === state.artist);
   g = groupGigs(g);
   g.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) * (state.sort === 'asc' ? 1 : -1));
@@ -288,9 +300,14 @@ function listHtml(g) {
 function render() {
   const all = allGigs();
   const countries = [...new Set(all.map((g) => g.country).filter(Boolean))].sort();
-  if (state.country && !countries.includes(state.country)) state.country = '';
-  $('country').innerHTML = '<option value="">All countries</option>' + countries.map((c) => { const cc = (all.find((g) => g.country === c) || {}).cc; return `<option value="${esc(c)}">${flag(cc)} ${esc(c)}</option>`; }).join('');
-  $('country').value = state.country;
+  state.countries = state.countries.filter((c) => countries.includes(c));
+  const ccOf = (c) => (all.find((g) => g.country === c) || {}).cc;
+  const panel = $('countryPanel'), keep = panel.scrollTop;
+  panel.innerHTML = (state.countries.length ? '<button type="button" class="clear" data-clear="1">Clear selection</button>' : '') +
+    countries.map((c) => `<label class="opt"><input type="checkbox" data-c="${esc(c)}"${state.countries.includes(c) ? ' checked' : ''}><span>${flag(ccOf(c))} ${esc(c)}</span></label>`).join('');
+  panel.scrollTop = keep;
+  const n = state.countries.length;
+  $('countryBtn').textContent = (n === 0 ? 'All countries' : n === 1 ? flag(ccOf(state.countries[0])) + ' ' + state.countries[0] : state.countries.slice(0, 4).map((c) => flag(ccOf(c))).join(' ') + ' · ' + n + ' countries') + ' ▾';
   $('vlist').classList.toggle('on', state.view === 'list');
   $('vcal').classList.toggle('on', state.view === 'cal');
   const g = filtered();
@@ -321,7 +338,16 @@ function renderCal(g) {
 
 /* ---------- wiring ---------- */
 $('tracktoggle').onclick = () => { state.collapsed = !state.collapsed; save(); renderChips(); };
-$('country').onchange = (e) => { state.country = e.target.value; state.day = null; save(); render(); };
+const setPanel = (open) => { $('countryPanel').hidden = !open; $('countryBtn').setAttribute('aria-expanded', String(open)); };
+$('countryBtn').onclick = () => setPanel($('countryPanel').hidden);
+$('countryPanel').onchange = (e) => {
+  const c = e.target.dataset.c; if (!c) return;
+  state.countries = e.target.checked ? [...state.countries, c] : state.countries.filter((x) => x !== c);
+  state.day = null; save(); render();
+};
+$('countryPanel').onclick = (e) => { if (e.target.dataset.clear) { state.countries = []; state.day = null; save(); render(); } };
+document.addEventListener('click', (e) => { if (!e.composedPath().some((el) => el.classList && el.classList.contains('ms'))) setPanel(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setPanel(false); });
 $('artistFilter').onchange = (e) => { state.artist = e.target.value; state.day = null; save(); render(); };
 $('vlist').onclick = () => { state.view = 'list'; save(); render(); };
 $('vcal').onclick = () => { state.view = 'cal'; save(); render(); };
