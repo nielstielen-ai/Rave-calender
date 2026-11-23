@@ -99,7 +99,10 @@
           <button id="countryBtn" type="button" aria-haspopup="true" aria-expanded="false">All countries ▾</button>
           <div id="countryPanel" class="panel" hidden></div>
         </div>
-        <select id="artistFilter"><option value="">All artists</option></select>
+        <div class="ms">
+          <button id="artistBtn" type="button" aria-haspopup="true" aria-expanded="false">All artists ▾</button>
+          <div id="artistPanel" class="panel" hidden></div>
+        </div>
       </div>
       <div class="row">
         <button id="vlist" class="on">List</button>
@@ -114,12 +117,14 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const LS = 'ra-gigs-v1';
-const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', countries: [], artist: '', view: 'list', month: null, day: null, variant: 0, collapsed: false },
+const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', countries: [], artistIds: [], view: 'list', month: null, day: null, variant: 0, collapsed: false },
   (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } })());
 state.month = null; state.day = null; state.sort = 'asc';
 if (!Array.isArray(state.countries)) state.countries = [];
+if (!Array.isArray(state.artistIds)) state.artistIds = [];
+if (state.artist) { if (!state.artistIds.length) state.artistIds = [state.artist]; delete state.artist; } // older saved single filter
 if (state.country) { if (!state.countries.length) state.countries = [state.country]; delete state.country; } // older saved single filter
-const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, countries: state.countries, artist: state.artist, view: state.view, variant: state.variant, collapsed: state.collapsed })); } catch {} };
+const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, countries: state.countries, artistIds: state.artistIds, view: state.view, variant: state.variant, collapsed: state.collapsed })); } catch {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const flag = (code) => {
@@ -215,10 +220,21 @@ function addArtist(a) {
 function removeArtist(id) {
   state.artists = state.artists.filter((a) => a.id !== id);
   delete state.gigs[id];
-  if (state.artist === id) state.artist = '';
+  state.artistIds = state.artistIds.filter((x) => x !== id);
   save(); pushArtists(); renderChips();
   $('status').textContent = '';
   render();
+}
+function renderArtistFilter() {
+  state.artistIds = state.artistIds.filter((id) => state.artists.some((a) => a.id === id));
+  const panel = $('artistPanel'), keep = panel.scrollTop;
+  const list = state.artists.slice().sort((a, b) => a.name.localeCompare(b.name));
+  panel.innerHTML = (state.artistIds.length ? '<button type="button" class="clear" data-clear="1">Clear selection</button>' : '') +
+    list.map((a) => `<label class="opt"><input type="checkbox" data-id="${esc(a.id)}"${state.artistIds.includes(a.id) ? ' checked' : ''}><span>${esc(a.name)}</span></label>`).join('');
+  panel.scrollTop = keep;
+  const n = state.artistIds.length;
+  const one = n === 1 ? (state.artists.find((a) => a.id === state.artistIds[0]) || {}).name : '';
+  $('artistBtn').textContent = (n === 0 ? 'All artists' : n === 1 ? one : n + ' artists') + ' ▾';
 }
 function renderChips() {
   $('trackh').textContent = 'Tracking · ' + state.artists.length;
@@ -228,8 +244,7 @@ function renderChips() {
     ? state.artists.map((a) => `<div class="chip"><span>${esc(a.name)}</span><button data-id="${esc(a.id)}" aria-label="Remove ${esc(a.name)}">×</button></div>`).join('')
     : '<span class="muted">No artists yet. Search above and select one.</span>';
   $('chips').onclick = (e) => { const b = e.target.closest('button'); if (b) removeArtist(b.dataset.id); };
-  $('artistFilter').innerHTML = '<option value="">All artists</option>' + state.artists.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
-  $('artistFilter').value = state.artist;
+  renderArtistFilter();
 }
 
 /* ---------- gigs (collected and cached by the server) ---------- */
@@ -271,7 +286,7 @@ function groupGigs(list) {
 function filtered() {
   let g = allGigs();
   if (state.countries.length) g = g.filter((x) => state.countries.includes(x.country));
-  if (state.artist) g = g.filter((x) => x.artistId === state.artist);
+  if (state.artistIds.length) g = g.filter((x) => state.artistIds.includes(x.artistId));
   g = groupGigs(g);
   g.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) * (state.sort === 'asc' ? 1 : -1));
   return g;
@@ -338,8 +353,18 @@ function renderCal(g) {
 
 /* ---------- wiring ---------- */
 $('tracktoggle').onclick = () => { state.collapsed = !state.collapsed; save(); renderChips(); };
-const setPanel = (open) => { $('countryPanel').hidden = !open; $('countryBtn').setAttribute('aria-expanded', String(open)); };
-$('countryBtn').onclick = () => setPanel($('countryPanel').hidden);
+const PANELS = [['countryBtn', 'countryPanel'], ['artistBtn', 'artistPanel']];
+const setPanel = (open, only) => PANELS.forEach(([b, p]) => {
+  const o = open && (!only || only === p);
+  $(p).hidden = !o; $(b).setAttribute('aria-expanded', String(o));
+});
+PANELS.forEach(([b, p]) => { $(b).onclick = () => setPanel($(p).hidden, p); });
+$('artistPanel').onchange = (e) => {
+  const id = e.target.dataset.id; if (!id) return;
+  state.artistIds = e.target.checked ? [...state.artistIds, id] : state.artistIds.filter((x) => x !== id);
+  state.day = null; save(); render(); renderArtistFilter();
+};
+$('artistPanel').onclick = (e) => { if (e.target.dataset.clear) { state.artistIds = []; state.day = null; save(); render(); renderArtistFilter(); } };
 $('countryPanel').onchange = (e) => {
   const c = e.target.dataset.c; if (!c) return;
   state.countries = e.target.checked ? [...state.countries, c] : state.countries.filter((x) => x !== c);
@@ -348,7 +373,6 @@ $('countryPanel').onchange = (e) => {
 $('countryPanel').onclick = (e) => { if (e.target.dataset.clear) { state.countries = []; state.day = null; save(); render(); } };
 document.addEventListener('click', (e) => { if (!e.composedPath().some((el) => el.classList && el.classList.contains('ms'))) setPanel(false); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setPanel(false); });
-$('artistFilter').onchange = (e) => { state.artist = e.target.value; state.day = null; save(); render(); };
 $('vlist').onclick = () => { state.view = 'list'; save(); render(); };
 $('vcal').onclick = () => { state.view = 'cal'; save(); render(); };
 
