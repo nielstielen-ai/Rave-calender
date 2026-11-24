@@ -388,7 +388,8 @@ renderChips(); render();
   const host = $('raven');
   if (!host) return;
   const TEXT = 'RAVEN IS LEVEN';
-  const COLORS = ['#ff3b2f', '#27ff7a', '#3ad7ff', '#ff3bd4'];
+  const COLORS = ['#ff3b2f', '#ffffff', '#ff3b2f', '#d7dbde', '#ff3b2f', '#9aa3ab']; // the app's red and shades of white
+  const BEAT = 60 / 140; // 140 bpm, in seconds
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const cv = document.createElement('canvas');
   const ctx = cv.getContext('2d');
@@ -401,7 +402,7 @@ renderChips(); render();
 
   function fit() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    size = innerWidth < 380 ? 14 : 18;
+    size = innerWidth < 380 ? 12 : 15;
     gap = size * 0.18;
     mctx.font = font();
     step = mctx.measureText('M').width + gap;
@@ -418,30 +419,34 @@ renderChips(); render();
 
   function frame(t) {
     const s = t / 1000;
+    const beat = s / BEAT, ph = beat % 1;            // beat counts up; ph runs 0..1 inside each beat
+    const kick = reduce ? 0 : Math.exp(-ph * 6);      // pulse that peaks on every beat
     ctx.globalCompositeOperation = 'source-over';
     ctx.shadowBlur = 0;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#050607'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#2a2e32'; ctx.fillRect(0, 0, W, H);
 
-    // strobe burst: a short run of fast white flashes every few seconds (none with reduced motion)
-    const burst = !reduce && (s % 5) > 3.9 && (s % 5) < 4.7;
-    if (burst && Math.floor(s * 10) % 2 === 0) {
+    // white flash on every beat; in the last bar of each 4 bars it doubles to every half beat (the build-up)
+    const build = Math.floor(beat / 4) % 4 === 3;
+    const flash = !reduce && (ph < 0.2 || (build && ph >= 0.5 && ph < 0.7));
+    if (flash) {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
     } else {
       ctx.globalCompositeOperation = 'lighter';
-      // drifting haze
+      // drifting haze, swelling on the beat
       for (let i = 0; i < 5; i++) {
-        const x = W * (0.5 + 0.55 * Math.sin(s * 0.6 + i * 1.3)), r = W * 0.28;
+        const x = W * (0.5 + 0.55 * Math.sin(beat * Math.PI / 8 + i * 1.3)), r = W * 0.28;
+        const c = COLORS[i % COLORS.length];
         const g = ctx.createRadialGradient(x, H / 2, 0, x, H / 2, r);
-        g.addColorStop(0, COLORS[i % COLORS.length] + 'cc'); g.addColorStop(1, COLORS[i % COLORS.length] + '00');
+        g.addColorStop(0, c + (kick > 0.4 ? 'ee' : '99')); g.addColorStop(1, c + '00');
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
       }
-      // lasers sweeping in from the top and bottom edges
-      ctx.lineWidth = 2;
+      // lasers sweeping in from the top and bottom edges, fattening on the beat
+      ctx.lineWidth = 1.6 + kick * 1.6;
       const n = 14;
       for (let i = 0; i < n; i++) {
         const top = i % 2 === 0, sx = W * (i + 0.5) / n, c = COLORS[i % COLORS.length];
-        const a = (top ? Math.PI / 2 : -Math.PI / 2) + Math.sin(s * 1.4 + i * 1.9) * 1.0;
+        const a = (top ? Math.PI / 2 : -Math.PI / 2) + Math.sin(beat * Math.PI / 4 + i * 1.9) * 1.0;
         ctx.strokeStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 5;
         ctx.beginPath(); ctx.moveTo(sx, top ? -2 : H + 2);
         ctx.lineTo(sx + Math.cos(a) * H * 4, (top ? -2 : H + 2) + Math.sin(a) * H * 4); ctx.stroke();
