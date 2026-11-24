@@ -21,6 +21,10 @@
   .quote{color:var(--dim);font-size:12px;font-weight:600;letter-spacing:.35em;text-transform:uppercase;line-height:1.5}
   h1{line-height:1.5}
   .bar.top{align-items:baseline}
+  .searchrow{display:flex;gap:8px}
+  .searchrow input{flex:1;min-width:0}
+  .searchrow button{height:auto;flex:none}
+  .foot{text-align:center;color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding-top:8px}
   .bar select{padding:6px 8px;font-size:11px;max-width:48vw}
   .ms{position:relative}
   .fbtn{display:inline-flex;align-items:center;height:32px;padding:0 10px;font-size:11px;line-height:1;text-transform:none;letter-spacing:0;white-space:nowrap}
@@ -83,18 +87,13 @@
   <div class="bar top"><h1>RA<span>/</span>GIGS</h1><span class="quote">Raven is leven</span></div>
 
   <section>
-    <h2>Find artist</h2>
-    <input id="q" type="search" placeholder="Search Resident Advisor…" autocomplete="off" spellcheck="false">
+    <div class="searchrow">
+      <input id="q" type="search" placeholder="Find artist" aria-label="Find artist" autocomplete="off" spellcheck="false">
+      <button id="tracktoggle" class="fbtn" type="button" aria-expanded="false">Followed</button>
+    </div>
     <div id="results" class="results" hidden></div>
     <div id="searchmsg" class="muted" style="margin-top:8px"></div>
-  </section>
-
-  <section>
-    <div class="bar" style="margin-bottom:10px">
-      <h2 id="trackh" style="margin:0">Tracking</h2>
-      <button id="tracktoggle">Hide</button>
-    </div>
-    <div id="chips" class="chips"></div>
+    <div id="chips" class="chips" style="margin-top:10px"></div>
   </section>
 
   <section>
@@ -114,15 +113,16 @@
         <button id="vcal" class="fbtn">Calendar</button>
       </div>
     </div>
-    <div id="status" class="muted" style="margin-bottom:8px"></div>
     <div id="view"></div>
   </section>
+
+  <div id="status" class="foot"></div>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const LS = 'ra-gigs-v1';
-const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', countries: [], artistIds: [], view: 'list', month: null, day: null, variant: 0, collapsed: false },
+const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', countries: [], artistIds: [], view: 'list', month: null, day: null, variant: 0, collapsed: true },
   (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } })());
 state.month = null; state.day = null; state.sort = 'asc';
 if (!Array.isArray(state.countries)) state.countries = [];
@@ -227,7 +227,6 @@ function removeArtist(id) {
   delete state.gigs[id];
   state.artistIds = state.artistIds.filter((x) => x !== id);
   save(); pushArtists(); renderChips();
-  $('status').textContent = '';
   render();
 }
 function renderArtistFilter() {
@@ -242,8 +241,8 @@ function renderArtistFilter() {
   $('artistBtn').textContent = (n === 0 ? 'All artists' : n === 1 ? one : n + ' artists') + ' ▾';
 }
 function renderChips() {
-  $('trackh').textContent = 'Tracking · ' + state.artists.length;
-  $('tracktoggle').textContent = state.collapsed ? 'Show' : 'Hide';
+  $('tracktoggle').textContent = state.collapsed ? 'Followed' : 'Followed · ' + state.artists.length;
+  $('tracktoggle').setAttribute('aria-expanded', String(!state.collapsed));
   $('chips').hidden = state.collapsed;
   $('chips').innerHTML = state.artists.length
     ? state.artists.map((a) => `<div class="chip"><span>${esc(a.name)}</span><button data-id="${esc(a.id)}" aria-label="Remove ${esc(a.name)}">×</button></div>`).join('')
