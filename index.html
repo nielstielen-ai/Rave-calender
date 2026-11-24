@@ -18,10 +18,13 @@
   h1{font-size:12px;font-weight:600;letter-spacing:.35em;text-transform:uppercase;margin:0;color:var(--hi)}
   h1 span{color:var(--accent)}
   h2{font-size:11px;font-weight:400;letter-spacing:.25em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
-  .quote{color:var(--dim);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+  .quote{color:var(--dim);font-size:12px;font-weight:600;letter-spacing:.35em;text-transform:uppercase;line-height:1.5}
+  h1{line-height:1.5}
+  .bar.top{align-items:baseline}
   .bar select{padding:6px 8px;font-size:11px;max-width:48vw}
   .ms{position:relative}
-  .ms > button{padding:6px 8px;font-size:11px;text-transform:none;letter-spacing:0;max-width:48vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fbtn{display:inline-flex;align-items:center;height:32px;padding:0 10px;font-size:11px;line-height:1;text-transform:none;letter-spacing:0;white-space:nowrap}
+  .ms > button{max-width:48vw;overflow:hidden;text-overflow:ellipsis}
   .panel{position:absolute;z-index:5;top:100%;left:0;margin-top:4px;min-width:230px;max-height:55vh;overflow:auto;background:var(--panel);border:1px solid var(--line);padding:4px}
   .opt{display:flex;align-items:center;gap:10px;padding:7px 8px;font-size:12px;cursor:pointer}
   .opt:hover{background:#14171a}
@@ -75,7 +78,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="bar"><h1>RA<span>/</span>GIGS</h1><span class="quote">Raven is leven</span></div>
+  <div class="bar top"><h1>RA<span>/</span>GIGS</h1><span class="quote">Raven is leven</span></div>
 
   <section>
     <h2>Find artist</h2>
@@ -96,17 +99,17 @@
     <div class="bar" style="margin-bottom:12px">
       <div class="row">
         <div class="ms">
-          <button id="countryBtn" type="button" aria-haspopup="true" aria-expanded="false">All countries ▾</button>
+          <button id="countryBtn" class="fbtn" type="button" aria-haspopup="true" aria-expanded="false">All countries ▾</button>
           <div id="countryPanel" class="panel" hidden></div>
         </div>
         <div class="ms">
-          <button id="artistBtn" type="button" aria-haspopup="true" aria-expanded="false">All artists ▾</button>
+          <button id="artistBtn" class="fbtn" type="button" aria-haspopup="true" aria-expanded="false">All artists ▾</button>
           <div id="artistPanel" class="panel" hidden></div>
         </div>
       </div>
       <div class="row">
-        <button id="vlist" class="on">List</button>
-        <button id="vcal">Calendar</button>
+        <button id="vlist" class="fbtn on">List</button>
+        <button id="vcal" class="fbtn">Calendar</button>
       </div>
     </div>
     <div id="status" class="muted" style="margin-bottom:8px"></div>
