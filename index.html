@@ -35,7 +35,9 @@
   input{width:100%}
   button{cursor:pointer;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
   button:hover{border-color:var(--dim);color:var(--hi)}
-  button.on{background:var(--hi);color:var(--bg);border-color:var(--hi)}
+  button.on{border-color:var(--dim);color:var(--hi)}
+  #vlist:not(.on),#vcal:not(.on){background:var(--bg);color:var(--dim)}
+  #vlist:not(.on):hover,#vcal:not(.on):hover{color:var(--hi)}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .results{border:1px solid var(--line);border-top:0}
   .res{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;background:var(--panel)}
