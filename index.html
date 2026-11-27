@@ -23,8 +23,8 @@
   .bar.top{align-items:center}
   .raven{display:block;flex:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   .catlane{position:absolute;left:0;right:0;overflow:hidden;pointer-events:none;z-index:30}
-  .cat{position:absolute;left:0;bottom:0;width:84px;height:54px;pointer-events:auto;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
-  .cat svg{display:block;width:84px;height:54px;overflow:visible}
+  .cat{position:absolute;left:0;bottom:0;width:56px;height:36px;pointer-events:auto;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .cat svg{display:block;width:56px;height:36px;overflow:visible}
   .cat.left svg{transform:scaleX(-1)}
   .cat svg *{transform-box:view-box}
   .cat .head{transform-origin:62px 22px}
@@ -572,7 +572,7 @@ renderChips(); render();
   }
 
   /* ---------- easter egg: tap the text 3 times and a cat walks in and dances to the beat ---------- */
-  const CAT_W = 84, CAT_H = 54, HEAD_ROOM = 14;
+  const CAT_W = 56, CAT_H = 36, HEAD_ROOM = 10;
   const leg = (cls, x, top, sock) => `<g class="leg ${cls}" style="transform-origin:${x + 2.7}px 28px"><rect x="${x}" y="27" width="5.4" height="12" rx="2.7" fill="${top}"/><rect x="${x}" y="35" width="5.4" height="13" rx="2.7" fill="${sock}"/><ellipse cx="${x + 3.2}" cy="48.6" rx="4.2" ry="2.5" fill="${sock}"/></g>`;
   const CAT_SVG = `<svg viewBox="0 0 84 54" aria-hidden="true">
 ${leg('legB', 22, '#6a4f36', '#d4d1cb')}${leg('legA', 50, '#6a4f36', '#d4d1cb')}
@@ -609,7 +609,7 @@ ${leg('legA', 29, '#8b6a47', '#f4f1ec')}${leg('legB', 56, '#8b6a47', '#f4f1ec')}
   const beatOffset = () => -(((performance.now() / 1000) / BEAT) % 2) * BEAT + 's';
   function walk(from, to, done) {
     cat.classList.add('walking'); cat.classList.toggle('left', to < from); // the drawing faces right
-    const dur = Math.max(900, Math.abs(to - from) / 60 * 1000); // about 60 px per second, matches the stride
+    const dur = Math.max(900, Math.abs(to - from) / 40 * 1000); // about 40 px per second, matches the stride
     const a = cat.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }], { duration: dur, easing: 'linear', fill: 'forwards' });
     a.onfinish = () => { cat.style.transform = `translateX(${to}px)`; a.cancel(); cat.classList.remove('walking'); done(); };
   }
