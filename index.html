@@ -99,7 +99,7 @@
   .gig.m-wish{background:linear-gradient(90deg,rgba(255,210,63,.09),transparent 75%)}
   .gig.m-bought{background:linear-gradient(90deg,rgba(61,220,132,.09),transparent 75%)}
   .gig:focus-visible{outline:1px solid var(--dim);outline-offset:-1px}
-  .gig a.ra{color:var(--dim);font-size:10px;letter-spacing:.1em;text-decoration:none;border:1px solid var(--line);padding:0 5px;margin-left:8px;white-space:nowrap}
+  .gig a.ra{display:table;margin-top:8px;color:var(--dim);font-size:10px;letter-spacing:.1em;text-decoration:none;border:1px solid var(--line);padding:1px 6px;white-space:nowrap}
   .gig a.ra:hover{color:var(--hi);border-color:var(--dim)}
   .ev.wish{border-left-color:var(--wish)} .ev.bought{border-left-color:var(--bought)}
   @media (prefers-reduced-motion:reduce){.gig .st.pop svg{animation:none}}
@@ -349,7 +349,7 @@ function gigRow(g) {
   const where = [g.venue, g.city].filter(Boolean).join(' · ');
   const id = g.id ? String(g.id) : '', mk = markOf(id);
   const ra = g.url ? `<a class="ra" href="${esc(g.url)}" target="_blank" rel="noopener" aria-label="Open on Resident Advisor">RA ↗</a>` : '';
-  return `<div class="gig${mk !== 'none' ? ' m-' + mk : ''}"${id ? ` data-id="${esc(id)}" data-date="${esc(g.date)}" tabindex="0"` : ''}><div class="d">${fmt(g.date)}</div><div class="info"><div class="a">${esc(g.artist)}</div><div class="v">${esc(where)}${g.title ? ' — ' + esc(g.title) : ''}${ra}</div></div><div class="st${id && id === popId ? ' pop' : ''}" title="${LABELS[mk] || ''}">${ICONS[mk] || ''}</div><div class="f" title="${esc(g.country)}">${flag(g.cc) || '—'}</div></div>`;
+  return `<div class="gig${mk !== 'none' ? ' m-' + mk : ''}"${id ? ` data-id="${esc(id)}" data-date="${esc(g.date)}" tabindex="0"` : ''}><div class="d">${fmt(g.date)}${ra}</div><div class="info"><div class="a">${esc(g.artist)}</div><div class="v">${esc(where)}${g.title ? ' — ' + esc(g.title) : ''}</div></div><div class="st${id && id === popId ? ' pop' : ''}" title="${LABELS[mk] || ''}">${ICONS[mk] || ''}</div><div class="f" title="${esc(g.country)}">${flag(g.cc) || '—'}</div></div>`;
 }
 const monthHead = (ym) => {
   const [y, m] = ym.split('-').map(Number);
