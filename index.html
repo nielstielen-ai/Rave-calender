@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#08090a; --panel:#0e1012; --line:#1e2226; --dim:#6b737b; --fg:#d7dbde; --hi:#ffffff; --accent:#ff3b2f;
+    --bg:#08090a; --panel:#0e1012; --line:#1e2226; --dim:#6b737b; --fg:#d7dbde; --hi:#ffffff; --accent:#ff3b2f; --wish:#ffd23f; --bought:#3ddc84;
     --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
@@ -88,11 +88,21 @@
   .month{display:flex;align-items:center;gap:12px;margin-top:26px;padding-bottom:8px;border-bottom:1px solid var(--line);color:var(--accent);font-size:22px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
   .month:first-child{margin-top:0}
   .month svg{flex:none;width:20px;height:28px}
-  .gig{display:grid;grid-template-columns:96px 1fr auto;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);align-items:baseline}
+  .gig{display:grid;grid-template-columns:96px 1fr 16px auto;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);align-items:baseline;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   .gig .d{color:var(--hi);font-variant-numeric:tabular-nums}
   .gig .a{color:var(--hi)} .gig .v{color:var(--dim)}
   .gig .f{font-size:18px}
-  .gig a{color:inherit;text-decoration:none} .gig a:hover .a{color:var(--accent)}
+  .gig .st{align-self:start;margin-top:5px;width:16px;height:16px}
+  .gig .st svg{display:block;width:16px;height:16px}
+  .gig .st.pop svg{animation:pop .28s ease-out}
+  @keyframes pop{0%{transform:scale(.4)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
+  .gig.m-wish{background:linear-gradient(90deg,rgba(255,210,63,.09),transparent 75%)}
+  .gig.m-bought{background:linear-gradient(90deg,rgba(61,220,132,.09),transparent 75%)}
+  .gig:focus-visible{outline:1px solid var(--dim);outline-offset:-1px}
+  .gig a.ra{color:var(--dim);font-size:10px;letter-spacing:.1em;text-decoration:none;border:1px solid var(--line);padding:0 5px;margin-left:8px;white-space:nowrap}
+  .gig a.ra:hover{color:var(--hi);border-color:var(--dim)}
+  .ev.wish{border-left-color:var(--wish)} .ev.bought{border-left-color:var(--bought)}
+  @media (prefers-reduced-motion:reduce){.gig .st.pop svg{animation:none}}
   .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
   .dow{background:var(--bg);padding:6px;color:var(--dim);font-size:10px;letter-spacing:.15em;text-align:center}
@@ -105,7 +115,7 @@
   .detail{margin-top:12px}
   .err{color:var(--accent)}
   @media(max-width:560px){
-    .gig{grid-template-columns:72px 1fr auto;gap:10px}
+    .gig{grid-template-columns:72px 1fr 16px auto;gap:10px}
     .cell{min-height:56px}.ev{font-size:0;border-left-width:6px;height:6px;margin-top:3px;padding:0}
   }
 </style>
@@ -144,20 +154,22 @@
     <div id="view"></div>
   </section>
 
+  <div class="foot" style="padding-top:0"><span style="color:var(--wish)">★ Double-tap</span> an event for your wishlist · <span style="color:var(--bought)">✓ Triple-tap</span> when tickets are bought</div>
   <div id="status" class="foot"></div>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const LS = 'ra-gigs-v1';
-const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', countries: [], artistIds: [], view: 'list', month: null, day: null, variant: 0, collapsed: true },
+const state = Object.assign({ artists: [], gigs: {}, sort: 'asc', countries: [], artistIds: [], view: 'list', month: null, day: null, variant: 0, collapsed: true, marks: {} },
   (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } })());
 state.month = null; state.day = null; state.sort = 'asc';
+if (!state.marks || typeof state.marks !== 'object' || Array.isArray(state.marks)) state.marks = {};
 if (!Array.isArray(state.countries)) state.countries = [];
 if (!Array.isArray(state.artistIds)) state.artistIds = [];
 if (state.artist) { if (!state.artistIds.length) state.artistIds = [state.artist]; delete state.artist; } // older saved single filter
 if (state.country) { if (!state.countries.length) state.countries = [state.country]; delete state.country; } // older saved single filter
-const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, countries: state.countries, artistIds: state.artistIds, view: state.view, variant: state.variant, collapsed: state.collapsed })); } catch {} };
+const save = () => { try { localStorage.setItem(LS, JSON.stringify({ artists: state.artists, gigs: state.gigs, sort: state.sort, countries: state.countries, artistIds: state.artistIds, view: state.view, variant: state.variant, collapsed: state.collapsed, marks: state.marks })); } catch {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const flag = (code) => {
@@ -326,9 +338,18 @@ function filtered() {
 
 /* ---------- render ---------- */
 const fmt = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+const ICONS = {
+  wish: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="#ffd23f"/></svg>',
+  bought: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#3ddc84"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#08090a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const LABELS = { wish: 'On your wishlist', bought: 'Tickets bought' };
+const markOf = (id) => (id && state.marks[id] && state.marks[id].s) || 'none';
+let popId = null;
 function gigRow(g) {
   const where = [g.venue, g.city].filter(Boolean).join(' · ');
-  return `<div class="gig"><div class="d">${fmt(g.date)}</div><a href="${esc(g.url)}" target="_blank" rel="noopener"><div class="a">${esc(g.artist)}</div><div class="v">${esc(where)}${g.title ? ' — ' + esc(g.title) : ''}</div></a><div class="f" title="${esc(g.country)}">${flag(g.cc) || '—'}</div></div>`;
+  const id = g.id ? String(g.id) : '', mk = markOf(id);
+  const ra = g.url ? `<a class="ra" href="${esc(g.url)}" target="_blank" rel="noopener" aria-label="Open on Resident Advisor">RA ↗</a>` : '';
+  return `<div class="gig${mk !== 'none' ? ' m-' + mk : ''}"${id ? ` data-id="${esc(id)}" data-date="${esc(g.date)}" tabindex="0"` : ''}><div class="d">${fmt(g.date)}</div><div class="info"><div class="a">${esc(g.artist)}</div><div class="v">${esc(where)}${g.title ? ' — ' + esc(g.title) : ''}${ra}</div></div><div class="st${id && id === popId ? ' pop' : ''}" title="${LABELS[mk] || ''}">${ICONS[mk] || ''}</div><div class="f" title="${esc(g.country)}">${flag(g.cc) || '—'}</div></div>`;
 }
 const monthHead = (ym) => {
   const [y, m] = ym.split('-').map(Number);
@@ -374,7 +395,7 @@ function renderCal(g) {
   for (let d = 1; d <= days; d++) {
     const ds = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const evs = by[ds] || [];
-    cells += `<div class="cell${ds === todayStr() ? ' today' : ''}${ds === state.day ? ' sel' : ''}" data-d="${ds}"><div class="n">${d}</div>${evs.slice(0, 3).map((e) => `<div class="ev">${flag(e.cc)} ${esc(e.artist)}</div>`).join('')}${evs.length > 3 ? `<div class="n">+${evs.length - 3}</div>` : ''}</div>`;
+    cells += `<div class="cell${ds === todayStr() ? ' today' : ''}${ds === state.day ? ' sel' : ''}" data-d="${ds}"><div class="n">${d}</div>${evs.slice(0, 3).map((e) => { const mk = markOf(e.id ? String(e.id) : ''); return `<div class="ev${mk !== 'none' ? ' ' + mk : ''}">${flag(e.cc)} ${esc(e.artist)}</div>`; }).join('')}${evs.length > 3 ? `<div class="n">+${evs.length - 3}</div>` : ''}</div>`;
   }
   const title = first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase();
   $('view').innerHTML = `<div class="cal-head"><button id="prev">←</button><span class="muted">${title}</span><button id="next">→</button></div><div class="grid">${cells}</div><div class="detail">${state.day && by[state.day] ? by[state.day].map(gigRow).join('') : '<span class="muted">Select a day.</span>'}</div>`;
@@ -384,6 +405,45 @@ function renderCal(g) {
 }
 
 /* ---------- wiring ---------- */
+/* ---------- wishlist and tickets: double-tap = wishlist, triple-tap = tickets bought (shared via the server) ---------- */
+let marksPending = 0, postChain = Promise.resolve();
+function setMark(id, s, date) {
+  if (s === 'none') delete state.marks[id]; else state.marks[id] = { s, d: date };
+  save(); popId = s === 'none' ? null : id; render(); popId = null;
+  marksPending++;
+  postChain = postChain
+    .then(() => fetch('/api/marks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, state: s, date }) }))
+    .catch(() => {})
+    .finally(() => { marksPending--; });
+}
+async function loadMarks() {
+  if (marksPending) return;
+  try {
+    const r = await fetch('/api/marks'); if (!r.ok) return;
+    const m = await r.json();
+    if (!m || typeof m !== 'object' || Array.isArray(m) || marksPending) return;
+    state.marks = m; save(); render();
+  } catch {}
+}
+const tap = { id: null, n: 0, prev: 'none', timer: 0 };
+$('view').addEventListener('click', (e) => {
+  if (e.target.closest('a')) return;
+  const row = e.target.closest('.gig[data-id]'); if (!row) return;
+  const id = row.dataset.id, date = row.dataset.date;
+  if (tap.id !== id) { tap.id = id; tap.n = 0; tap.prev = markOf(id); }
+  tap.n++;
+  clearTimeout(tap.timer); tap.timer = setTimeout(() => { tap.id = null; }, 380);
+  if (tap.n === 2) setMark(id, tap.prev === 'wish' ? 'none' : 'wish', date);
+  else if (tap.n === 3) setMark(id, tap.prev === 'bought' ? 'none' : 'bought', date);
+});
+$('view').addEventListener('keydown', (e) => { // keyboard: Enter cycles none -> wishlist -> bought -> none
+  const row = e.target.closest && e.target.closest('.gig[data-id]');
+  if (!row || e.target !== row || e.key !== 'Enter') return;
+  const id = row.dataset.id, next = { none: 'wish', wish: 'bought', bought: 'none' }[markOf(id)];
+  setMark(id, next, row.dataset.date);
+  const again = $('view').querySelector(`.gig[data-id="${CSS.escape(id)}"]`); if (again) again.focus();
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadMarks(); });
 $('tracktoggle').onclick = () => { state.collapsed = !state.collapsed; save(); renderChips(); };
 const PANELS = [['countryBtn', 'countryPanel'], ['artistBtn', 'artistPanel']];
 const setPanel = (open, only) => PANELS.forEach(([b, p]) => {
@@ -409,7 +469,7 @@ $('vlist').onclick = () => { state.view = 'list'; save(); render(); };
 $('vcal').onclick = () => { state.view = 'cal'; save(); render(); };
 
 renderChips(); render();
-(async () => { await pullArtists(); renderChips(); render(); loadGigs(); })();
+(async () => { await pullArtists(); renderChips(); render(); loadGigs(); loadMarks(); })();
 /* ---------- "RAVEN IS LEVEN": letters are windows onto a light show ---------- */
 (function ravenLights() {
   const host = $('raven');

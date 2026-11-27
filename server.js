@@ -37,6 +37,15 @@ async function save(key, file, json) {
 const loadList = () => load('artists', DATA, '[]');
 const saveList = (json) => save('artists', DATA, json);
 
+/* ---------- wishlist / tickets marks: { eventId: { s: 'wish' | 'bought', d: 'YYYY-MM-DD' } } ---------- */
+const MARKS_FILE = path.join(path.dirname(DATA), 'marks.json');
+let marksLock = Promise.resolve();
+const withLock = (fn) => { const p = marksLock.then(fn); marksLock = p.catch(() => {}); return p; };
+async function loadMarks() {
+  const raw = await load('marks', MARKS_FILE, '{}'); // errors propagate so a failed read never overwrites saved marks
+  try { const m = JSON.parse(raw); return m && typeof m === 'object' && !Array.isArray(m) ? m : {}; } catch { return {}; }
+}
+
 /* ---------- talking to RA ---------- */
 const RA_HEADERS = {
   'Content-Type': 'application/json',
@@ -176,6 +185,32 @@ const server = http.createServer(async (req, res) => {
         await saveList(JSON.stringify(list));
         json(res, 200, { ok: true });
         refresh('missing'); // fetch gigs for newly added artists in the background
+      } catch (e) { json(res, 400, { error: e.message }); }
+    });
+    return;
+  }
+  if (u.pathname === '/api/marks' && req.method === 'GET') {
+    try { json(res, 200, await loadMarks()); } catch (e) { json(res, 502, { error: e.message }); }
+    return;
+  }
+  if (u.pathname === '/api/marks' && req.method === 'POST') {
+    let b = '';
+    req.on('data', (c) => (b += c));
+    req.on('end', async () => {
+      try {
+        const { id, state, date } = JSON.parse(b);
+        if (!/^[\w-]{1,40}$/.test(String(id))) throw new Error('bad id');
+        if (!['none', 'wish', 'bought'].includes(state)) throw new Error('bad state');
+        if (state !== 'none' && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error('bad date');
+        const out = await withLock(async () => {
+          const m = await loadMarks();
+          if (state === 'none') delete m[id]; else m[id] = { s: state, d: date };
+          const min = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10); // forget events from over two weeks ago
+          for (const k of Object.keys(m)) if (!m[k] || !m[k].d || m[k].d < min) delete m[k];
+          await save('marks', MARKS_FILE, JSON.stringify(m));
+          return m;
+        });
+        json(res, 200, out);
       } catch (e) { json(res, 400, { error: e.message }); }
     });
     return;
